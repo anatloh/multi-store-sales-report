@@ -1,0 +1,295 @@
+{
+  "name": "Worker - Direct Sales Data",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "971b478e-dc91-4b7f-8045-6878f3fb8d6e",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -272,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @CurrentLocalTime DATETIME = DATEADD(HOUR, 8, GETUTCDATE());\nDECLARE @Today DATE = CAST(@CurrentLocalTime AS DATE);\nDECLARE @LastWeek DATE = DATEADD(DAY, -7, @Today);\nDECLARE @ReportHour INT = CASE WHEN DATEPART(HOUR, @CurrentLocalTime) < 18 THEN 16 ELSE 20 END;\n\nSELECT \n    'Direct' AS ShopType,\n    ISNULL((\n        SELECT TOP 1 DirectSales \n        FROM [SalesDataDB].[dbo].[Daily_API_Sales] WITH (NOLOCK)\n        WHERE TRY_CAST(ReportDate AS DATE) = @Today\n        ORDER BY id DESC\n    ), 0) AS NetSalesAmount,\n    ISNULL(\n        COALESCE(\n            (\n                SELECT TOP 1 NetSalesAmount \n                FROM [SalesDataDB].[dbo].[Daily_Summary_Sales] WITH (NOLOCK)\n                WHERE ShopType = 'Direct' \n                  AND TRY_CAST(ReportDate AS DATE) = @LastWeek\n                  AND ReportHour <= @ReportHour\n                ORDER BY ReportHour DESC\n            ),\n            (\n                SELECT TOP 1 DirectSales \n                FROM [SalesDataDB].[dbo].[Daily_API_Sales] WITH (NOLOCK)\n                WHERE TRY_CAST(ReportDate AS DATE) = @LastWeek\n                ORDER BY id DESC\n            )\n        ), 0\n    ) AS LastWeekNetSales;"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        16
+      ],
+      "id": "700cf36e-20dd-46ac-b127-eae55dd58c74",
+      "name": "header_direct",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @CurrentLocalTime DATETIME = DATEADD(HOUR, 8, GETUTCDATE());\nDECLARE @Today DATE = CAST(@CurrentLocalTime AS DATE);\nDECLARE @LastWeek DATE = DATEADD(DAY, -7, @Today);\nDECLARE @ReportHour INT = CASE WHEN DATEPART(HOUR, @CurrentLocalTime) < 18 THEN 16 ELSE 20 END;\n\nSELECT \n    'Direct' AS ShopType,\n    ISNULL((\n        SELECT COUNT(1) \n        FROM [SalesDataDB].[dbo].[Sales_Header] sh WITH (NOLOCK)\n        INNER JOIN [SalesDataDB].[dbo].[Shop_Master] sm WITH (NOLOCK) ON sh.shopId = sm.shopId\n        WHERE sm.ShopType = 'Direct' \n          AND sh.txDate = @Today\n    ), 0) AS TotalTransactions,\n    ISNULL((\n        SELECT TOP 1 TotalTransactions \n        FROM [SalesDataDB].[dbo].[Daily_Summary_Sales] WITH (NOLOCK)\n        WHERE ShopType = 'Direct' \n          AND TRY_CAST(ReportDate AS DATE) = @LastWeek\n          AND ReportHour <= @ReportHour\n        ORDER BY ReportHour DESC\n    ), 0) AS LastWeekTransactions;"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        192
+      ],
+      "id": "00dd5d45-e15a-4023-a380-0a0b0114b504",
+      "name": "trans_direct",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @CurrentLocalTime DATETIME = DATEADD(HOUR, 8, GETUTCDATE());\nDECLARE @TodayStart DATETIME = CAST(CAST(@CurrentLocalTime AS DATE) AS DATETIME);\nDECLARE @TodayEnd DATETIME = @CurrentLocalTime;\nDECLARE @LastWeekStart DATETIME = DATEADD(DAY, -7, @TodayStart);\nDECLARE @LastWeekEnd DATETIME = DATEADD(DAY, -7, @TodayEnd);\n\nSELECT \n    'Direct' AS ShopType,\n    t.CampaignName,\n    ISNULL(s.qty, 0) AS campaignqty,\n    ISNULL(s.amt, 0) AS campaignamount,\n    ISNULL(s.lastweek_amt, 0) AS lastweekamount\nFROM (\n    SELECT 'Fries' AS CampaignName UNION ALL\n    SELECT 'Chicken' AS CampaignName UNION ALL\n    SELECT 'Croquette' AS CampaignName UNION ALL\n    SELECT 'StudentCroquette' AS CampaignName UNION ALL\n    SELECT 'Combo' AS CampaignName UNION ALL\n    SELECT 'AutumnFood' AS CampaignName UNION ALL\n    SELECT 'SatayChicken' AS CampaignName UNION ALL\n    SELECT 'IndonesianShrimpCrackers' AS CampaignName UNION ALL\n    SELECT 'BasilSquidBalls' AS CampaignName UNION ALL\n    SELECT 'SatayFreshSet' AS CampaignName UNION ALL\n    SELECT 'SatayCrispySet' AS CampaignName UNION ALL\n    SELECT 'Mug' AS CampaignName UNION ALL\n    SELECT 'Coaster' AS CampaignName UNION ALL\n    SELECT 'MagnetSet' AS CampaignName UNION ALL\n    SELECT 'StoredValue' AS CampaignName UNION ALL\n    SELECT 'Online' AS CampaignName \n) t\nLEFT JOIN (\n    SELECT \n        v.MappedName AS CampaignName,\n        SUM(CASE WHEN d.txDate >= @TodayStart AND d.txDate <= @TodayEnd THEN d.quantity ELSE 0 END) AS qty,\n        SUM(CASE WHEN d.txDate >= @TodayStart AND d.txDate <= @TodayEnd THEN d.amount ELSE 0 END) AS amt,\n        SUM(CASE WHEN d.txDate >= @LastWeekStart AND d.txDate <= @LastWeekEnd THEN d.amount ELSE 0 END) AS lastweek_amt\n    FROM [SalesDataDB].[dbo].[DailyItemSales] d WITH (NOLOCK)\n    JOIN [SalesDataDB].[dbo].[Shop_Master] m WITH (NOLOCK) ON d.shopId = m.shopId\n    CROSS APPLY (\n        SELECT \n            CASE \n                WHEN d.itemName LIKE N'%學生證%' AND d.itemName LIKE N'%可樂餅%' THEN 'StudentCroquette'\n                WHEN d.itemName LIKE N'%薯條%' THEN 'Fries'\n                WHEN d.itemName LIKE N'%炸雞%' OR d.itemName LIKE N'%雙享雞%' THEN 'Chicken'\n                WHEN d.itemName LIKE N'%可樂餅%' THEN 'Croquette'\n                WHEN d.itemName LIKE N'%一拳超人%' OR d.itemName LIKE N'%一拳套餐%' THEN 'Combo'\n                WHEN d.itemName LIKE N'%秋日好食%' OR d.itemName LIKE N'%買一送一%' THEN 'AutumnFood'\n                WHEN (d.itemName LIKE N'%沙嗲無骨腿丁%' OR d.itemName LIKE N'%沙嗲無骨腿丁(FP)%' OR d.itemName LIKE N'%沙嗲無骨腿丁(UE)%') AND d.itemName NOT LIKE N'%(套)沙嗲無骨腿丁%' THEN 'SatayChicken'\n                WHEN (d.itemName LIKE N'%印尼蝦餅%' OR d.itemName LIKE N'%印尼蝦餅(FP)%' OR d.itemName LIKE N'%印尼蝦餅(UE)%') AND d.itemName NOT LIKE N'%(套)印尼蝦餅%' THEN 'IndonesianShrimpCrackers'\n                WHEN (d.itemName LIKE N'%九層塔炸花枝丸(泰式酸甜醬)%' OR d.itemName LIKE N'%九層塔花枝丸(FP)%' OR d.itemName LIKE N'%九層塔花枝丸(UE)%') AND d.itemName NOT LIKE N'%(套)九層塔炸花枝丸%' THEN 'BasilSquidBalls'\n                WHEN d.itemName LIKE N'%沙嗲鮮香組%' OR d.itemName LIKE N'%沙嗲鮮香組(FP)%' OR d.itemName LIKE N'%沙嗲鮮香組(UE)%' THEN 'SatayFreshSet'\n                WHEN d.itemName LIKE N'%沙嗲香脆組%' OR d.itemName LIKE N'%沙嗲香脆組(FP)%' OR d.itemName LIKE N'%沙嗲香脆組(UE)%' THEN 'SatayCrispySet'\n                WHEN d.itemName LIKE N'%馬克杯%' THEN 'Mug'\n                WHEN d.itemName LIKE N'%杯墊%' THEN 'Coaster'\n                WHEN d.itemName LIKE N'%699%磁鐵%' OR d.itemName LIKE N'%磁鐵組%' OR d.itemName LIKE N'%10款1套%' THEN 'MagnetSet'\n                WHEN d.itemName LIKE N'%儲值%' THEN 'StoredValue'\n                WHEN d.itemName LIKE N'%線上點%' THEN 'Online'\n                ELSE 'Other'\n            END AS MappedName\n    ) v\n    WHERE m.ShopType = 'Direct'\n      AND (\n          (d.txDate >= @TodayStart AND d.txDate <= @TodayEnd)\n          OR \n          (d.txDate >= @LastWeekStart AND d.txDate <= @LastWeekEnd)\n      )\n    GROUP BY v.MappedName\n) s ON t.CampaignName = s.CampaignName;"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        352
+      ],
+      "id": "1a441b5d-571e-4e04-8337-0b687619684f",
+      "name": "item_direct",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        208,
+        192
+      ],
+      "id": "79417d97-6f38-4126-a803-9a91ed480a19",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "let totalNetSales = 0;\nlet totalLastWeekNetSales = 0;\nlet totalTransactionsCount = 0;\nlet totalLastWeekTransactions = 0;\nlet totalStoredValue = 0;\nlet totalLastWeekStoredValue = 0;\nlet totalOnline = 0;\nlet totalLastWeekOnline = 0;\nlet campaigns = [];\n\nconst allIncomingItems = (typeof $input !== 'undefined' && typeof $input.all === 'function') \n    ? $input.all() \n    : items;\n\nfor (let item of allIncomingItems) {\n    const data = item.json ? item.json : item;\n    if (!data) continue;\n\n    if (data.NetSalesAmount !== undefined && data.NetSalesAmount !== null) totalNetSales += Number(data.NetSalesAmount) || 0;\n    if (data.netSalesAmount !== undefined && data.netSalesAmount !== null) totalNetSales += Number(data.netSalesAmount) || 0;\n    \n    if (data.LastWeekNetSales !== undefined && data.LastWeekNetSales !== null) totalLastWeekNetSales += Number(data.LastWeekNetSales) || 0;\n    if (data.lastWeekNetSales !== undefined && data.lastWeekNetSales !== null) totalLastWeekNetSales += Number(data.lastWeekNetSales) || 0;\n    \n    if (data.TotalTransactions !== undefined && data.TotalTransactions !== null) totalTransactionsCount += Number(data.TotalTransactions) || 0;\n    if (data.totalTransactions !== undefined && data.totalTransactions !== null) totalTransactionsCount += Number(data.totalTransactions) || 0;\n    \n    if (data.LastWeekTransactions !== undefined && data.LastWeekTransactions !== null) totalLastWeekTransactions += Number(data.LastWeekTransactions) || 0;\n    if (data.lastWeekTransactions !== undefined && data.lastWeekTransactions !== null) totalLastWeekTransactions += Number(data.lastWeekTransactions) || 0;\n    \n    const cName = data.CampaignName || data.campaignName;\n    if (cName !== undefined) {\n        if (cName === 'StoredValue') {\n            totalStoredValue += Number(data.campaignamount || data.CampaignAmount) || 0;\n            totalLastWeekStoredValue += Number(data.lastweekamount || data.LastWeekAmount) || 0;\n        } else if (cName === 'Online') {\n            totalOnline += Number(data.campaignamount || data.CampaignAmount) || 0;\n            totalLastWeekOnline += Number(data.lastweekamount || data.LastWeekAmount) || 0;\n        } else if (cName !== 'Other') {\n            campaigns.push({\n                CampaignName: cName,\n                campaignqty: Number(data.campaignqty || data.CampaignQty) || 0,\n                campaignamount: Number(data.campaignamount || data.CampaignAmount) || 0\n            });\n        }\n    }\n}\n\nreturn [{\n    json: {\n        ShopType: \"Direct\",\n        NetSalesAmount: totalNetSales,\n        LastWeekNetSales: totalLastWeekNetSales,\n        TotalTransactions: totalTransactionsCount,\n        LastWeekTransactions: totalLastWeekTransactions,\n        StoredValue: totalStoredValue,\n        LastWeekStoredValue: totalLastWeekStoredValue,\n        Online: totalOnline,\n        LastWeekOnline: totalLastWeekOnline,\n        Campaigns: campaigns\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        208
+      ],
+      "id": "adc0b142-3009-4e6c-af32-559f2a0423e5",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          { "node": "header_direct", "type": "main", "index": 0 },
+          { "node": "trans_direct", "type": "main", "index": 0 },
+          { "node": "item_direct", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "header_direct": { "main": [[{ "node": "Merge", "type": "main", "index": 0 }]] },
+    "trans_direct": { "main": [[{ "node": "Merge", "type": "main", "index": 1 }]] },
+    "item_direct": { "main": [[{ "node": "Merge", "type": "main", "index": 2 }]] },
+    "Merge": { "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "sanitized-version-id",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "sanitized-instance-id"
+  },
+  "id": "jZo3PWu9EdZi4TIb",
+  "tags": []
+}
+
+{
+  "name": "Worker - Franchise Sales Data",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "20f05c79-f470-44f8-a80e-74800808b260",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -272,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @CurrentLocalTime DATETIME = DATEADD(HOUR, 8, GETUTCDATE());\nDECLARE @Today DATE = CAST(@CurrentLocalTime AS DATE);\nDECLARE @LastWeek DATE = DATEADD(DAY, -7, @Today);\nDECLARE @ReportHour INT = CASE WHEN DATEPART(HOUR, @CurrentLocalTime) < 18 THEN 16 ELSE 20 END;\n\nSELECT \n    'Franchise' AS ShopType,\n    ISNULL((\n        SELECT TOP 1 FranchiseSales \n        FROM [SalesDataDB].[dbo].[Daily_API_Sales] WITH (NOLOCK)\n        WHERE TRY_CAST(ReportDate AS DATE) = @Today\n        ORDER BY id DESC\n    ), 0) AS NetSalesAmount,\n    ISNULL(\n        COALESCE(\n            (\n                SELECT TOP 1 NetSalesAmount \n                FROM [SalesDataDB].[dbo].[Daily_Summary_Sales] WITH (NOLOCK)\n                WHERE ShopType = 'Franchise' \n                  AND TRY_CAST(ReportDate AS DATE) = @LastWeek\n                  AND ReportHour <= @ReportHour\n                ORDER BY ReportHour DESC\n            ),\n            (\n                SELECT TOP 1 FranchiseSales \n                FROM [SalesDataDB].[dbo].[Daily_API_Sales] WITH (NOLOCK)\n                WHERE TRY_CAST(ReportDate AS DATE) = @LastWeek\n                ORDER BY id DESC\n            )\n        ), 0\n    ) AS LastWeekNetSales;"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "2095ce0c-0f06-4f91-b427-70ffc79d7abf",
+      "name": "header_franchise",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @CurrentLocalTime DATETIME = DATEADD(HOUR, 8, GETUTCDATE());\nDECLARE @Today DATE = CAST(@CurrentLocalTime AS DATE);\nDECLARE @LastWeek DATE = DATEADD(DAY, -7, @Today);\nDECLARE @ReportHour INT = CASE WHEN DATEPART(HOUR, @CurrentLocalTime) < 18 THEN 16 ELSE 20 END;\n\nSELECT \n    'Franchise' AS ShopType,\n    ISNULL((\n        SELECT COUNT(1) \n        FROM [SalesDataDB].[dbo].[Sales_Header] sh WITH (NOLOCK)\n        INNER JOIN [SalesDataDB].[dbo].[Shop_Master] sm WITH (NOLOCK) ON sh.shopId = sm.shopId\n        WHERE sm.ShopType = 'Franchise' \n          AND sh.txDate = @Today\n    ), 0) AS TotalTransactions,\n    ISNULL((\n        SELECT TOP 1 TotalTransactions \n        FROM [SalesDataDB].[dbo].[Daily_Summary_Sales] WITH (NOLOCK)\n        WHERE ShopType = 'Franchise' \n          AND TRY_CAST(ReportDate AS DATE) = @LastWeek\n          AND ReportHour <= @ReportHour\n        ORDER BY ReportHour DESC\n    ), 0) AS LastWeekTransactions;"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        192
+      ],
+      "id": "f29c6f9d-5dbd-4ef3-b429-da6dda295a88",
+      "name": "trans_franchise",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @CurrentLocalTime DATETIME = DATEADD(HOUR, 8, GETUTCDATE());\nDECLARE @TodayStart DATETIME = CAST(CAST(@CurrentLocalTime AS DATE) AS DATETIME);\nDECLARE @TodayEnd DATETIME = @CurrentLocalTime;\nDECLARE @LastWeekStart DATETIME = DATEADD(DAY, -7, @TodayStart);\nDECLARE @LastWeekEnd DATETIME = DATEADD(DAY, -7, @TodayEnd);\n\nSELECT \n    'Franchise' AS ShopType,\n    t.CampaignName,\n    ISNULL(s.qty, 0) AS campaignqty,\n    ISNULL(s.amt, 0) AS campaignamount,\n    ISNULL(s.lastweek_amt, 0) AS lastweekamount\nFROM (\n    SELECT 'Fries' AS CampaignName UNION ALL\n    SELECT 'Chicken' AS CampaignName UNION ALL\n    SELECT 'Croquette' AS CampaignName UNION ALL\n    SELECT 'StudentCroquette' AS CampaignName UNION ALL\n    SELECT 'Combo' AS CampaignName UNION ALL\n    SELECT 'AutumnFood' AS CampaignName UNION ALL\n    SELECT 'SatayChicken' AS CampaignName UNION ALL\n    SELECT 'IndonesianShrimpCrackers' AS CampaignName UNION ALL\n    SELECT 'BasilSquidBalls' AS CampaignName UNION ALL\n    SELECT 'SatayFreshSet' AS CampaignName UNION ALL\n    SELECT 'SatayCrispySet' AS CampaignName UNION ALL\n    SELECT 'Mug' AS CampaignName UNION ALL\n    SELECT 'Coaster' AS CampaignName UNION ALL\n    SELECT 'MagnetSet' AS CampaignName UNION ALL\n    SELECT 'StoredValue' AS CampaignName UNION ALL\n    SELECT 'Online' AS CampaignName \n) t\nLEFT JOIN (\n    SELECT \n        v.MappedName AS CampaignName,\n        SUM(CASE WHEN d.txDate >= @TodayStart AND d.txDate <= @TodayEnd THEN d.quantity ELSE 0 END) AS qty,\n        SUM(CASE WHEN d.txDate >= @TodayStart AND d.txDate <= @TodayEnd THEN d.amount ELSE 0 END) AS amt,\n        SUM(CASE WHEN d.txDate >= @LastWeekStart AND d.txDate <= @LastWeekEnd THEN d.amount ELSE 0 END) AS lastweek_amt\n    FROM [SalesDataDB].[dbo].[DailyItemSales] d WITH (NOLOCK)\n    JOIN [SalesDataDB].[dbo].[Shop_Master] m WITH (NOLOCK) ON d.shopId = m.shopId\n    CROSS APPLY (\n        SELECT \n            CASE \n                WHEN d.itemName LIKE N'%學生證%' AND d.itemName LIKE N'%可樂餅%' THEN 'StudentCroquette'\n                WHEN d.itemName LIKE N'%薯條%' THEN 'Fries'\n                WHEN d.itemName LIKE N'%炸雞%' OR d.itemName LIKE N'%雙享雞%' THEN 'Chicken'\n                WHEN d.itemName LIKE N'%可樂餅%' THEN 'Croquette'\n                WHEN d.itemName LIKE N'%一拳超人%' OR d.itemName LIKE N'%一拳套餐%' THEN 'Combo'\n                WHEN d.itemName LIKE N'%秋日好食%' OR d.itemName LIKE N'%買一送一%' THEN 'AutumnFood'\n                WHEN (d.itemName LIKE N'%沙嗲無骨腿丁%' OR d.itemName LIKE N'%沙嗲無骨腿丁(FP)%' OR d.itemName LIKE N'%沙嗲無骨腿丁(UE)%') AND d.itemName NOT LIKE N'%(套)沙嗲無骨腿丁%' THEN 'SatayChicken'\n                WHEN (d.itemName LIKE N'%印尼蝦餅%' OR d.itemName LIKE N'%印尼蝦餅(FP)%' OR d.itemName LIKE N'%印尼蝦餅(UE)%') AND d.itemName NOT LIKE N'%(套)印尼蝦餅%' THEN 'IndonesianShrimpCrackers'\n                WHEN (d.itemName LIKE N'%九層塔炸花枝丸(泰式酸甜醬)%' OR d.itemName LIKE N'%九層塔花枝丸(FP)%' OR d.itemName LIKE N'%九層塔花枝丸(UE)%') AND d.itemName NOT LIKE N'%(套)九層塔炸花枝丸%' THEN 'BasilSquidBalls'\n                WHEN d.itemName LIKE N'%沙嗲鮮香組%' OR d.itemName LIKE N'%沙嗲鮮香組(FP)%' OR d.itemName LIKE N'%沙嗲鮮香組(UE)%' THEN 'SatayFreshSet'\n                WHEN d.itemName LIKE N'%沙嗲香脆組%' OR d.itemName LIKE N'%沙嗲香脆組(FP)%' OR d.itemName LIKE N'%沙嗲香脆組(UE)%' THEN 'SatayCrispySet'\n                WHEN d.itemName LIKE N'%馬克杯%' THEN 'Mug'\n                WHEN d.itemName LIKE N'%杯墊%' THEN 'Coaster'\n                WHEN d.itemName LIKE N'%699%磁鐵%' OR d.itemName LIKE N'%磁鐵組%' OR d.itemName LIKE N'%10款1套%' THEN 'MagnetSet'\n                WHEN d.itemName LIKE N'%儲值%' THEN 'StoredValue'\n                WHEN d.itemName LIKE N'%線上點%' THEN 'Online'\n                ELSE 'Other'\n            END AS MappedName\n    ) v\n    WHERE m.ShopType = 'Franchise'\n      AND (\n          (d.txDate >= @TodayStart AND d.txDate <= @TodayEnd)\n          OR \n          (d.txDate >= @LastWeekStart AND d.txDate <= @LastWeekEnd)\n      )\n    GROUP BY v.MappedName\n) s ON t.CampaignName = s.CampaignName;"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        368
+      ],
+      "id": "66653845-17fe-4503-8963-30c74b4ced0b",
+      "name": "item_franchise",
+      "alwaysOutputData": false,
+      "retryOnFail": true,
+      "executeOnce": false,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        240,
+        208
+      ],
+      "id": "b61fd025-7561-4175-ba90-895db04e1af3",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "let totalNetSales = 0;\nlet totalLastWeekNetSales = 0;\nlet totalTransactionsCount = 0;\nlet totalLastWeekTransactions = 0;\nlet totalStoredValue = 0;\nlet totalLastWeekStoredValue = 0;\nlet totalOnline = 0;\nlet totalLastWeekOnline = 0;\nlet campaigns = [];\n\nconst allIncomingItems = (typeof $input !== 'undefined' && typeof $input.all === 'function') \n    ? $input.all() \n    : items;\n\nfor (let item of allIncomingItems) {\n    const data = item.json ? item.json : item;\n    if (!data) continue;\n\n    if (data.NetSalesAmount !== undefined && data.NetSalesAmount !== null) totalNetSales += Number(data.NetSalesAmount) || 0;\n    if (data.netSalesAmount !== undefined && data.netSalesAmount !== null) totalNetSales += Number(data.netSalesAmount) || 0;\n    \n    if (data.LastWeekNetSales !== undefined && data.LastWeekNetSales !== null) totalLastWeekNetSales += Number(data.LastWeekNetSales) || 0;\n    if (data.lastWeekNetSales !== undefined && data.lastWeekNetSales !== null) totalLastWeekNetSales += Number(data.lastWeekNetSales) || 0;\n    \n    if (data.TotalTransactions !== undefined && data.TotalTransactions !== null) totalTransactionsCount += Number(data.TotalTransactions) || 0;\n    if (data.totalTransactions !== undefined && data.totalTransactions !== null) totalTransactionsCount += Number(data.totalTransactions) || 0;\n    \n    if (data.LastWeekTransactions !== undefined && data.LastWeekTransactions !== null) totalLastWeekTransactions += Number(data.LastWeekTransactions) || 0;\n    if (data.lastWeekTransactions !== undefined && data.lastWeekTransactions !== null) totalLastWeekTransactions += Number(data.lastWeekTransactions) || 0;\n    \n    const cName = data.CampaignName || data.campaignName;\n    if (cName !== undefined) {\n        if (cName === 'StoredValue') {\n            totalStoredValue += Number(data.campaignamount || data.CampaignAmount) || 0;\n            totalLastWeekStoredValue += Number(data.lastweekamount || data.LastWeekAmount) || 0;\n        } else if (cName === 'Online') {\n            totalOnline += Number(data.campaignamount || data.CampaignAmount) || 0;\n            totalLastWeekOnline += Number(data.lastweekamount || data.LastWeekAmount) || 0;\n        } else if (cName !== 'Other') {\n            campaigns.push({\n                CampaignName: cName,\n                campaignqty: Number(data.campaignqty || data.CampaignQty) || 0,\n                campaignamount: Number(data.campaignamount || data.CampaignAmount) || 0\n            });\n        }\n    }\n}\n\nreturn [{\n    json: {\n        ShopType: \"Franchise\",\n        NetSalesAmount: totalNetSales,\n        LastWeekNetSales: totalLastWeekNetSales,\n        TotalTransactions: totalTransactionsCount,\n        LastWeekTransactions: totalLastWeekTransactions,\n        StoredValue: totalStoredValue,\n        LastWeekStoredValue: totalLastWeekStoredValue,\n        Online: totalOnline,\n        LastWeekOnline: totalLastWeekOnline,\n        Campaigns: campaigns\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        224
+      ],
+      "id": "d3b8ef01-4831-4fed-98e0-9ea4159ba025",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          { "node": "header_franchise", "type": "main", "index": 0 },
+          { "node": "trans_franchise", "type": "main", "index": 0 },
+          { "node": "item_franchise", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "header_franchise": { "main": [[{ "node": "Merge", "type": "main", "index": 0 }]] },
+    "trans_franchise": { "main": [[{ "node": "Merge", "type": "main", "index": 1 }]] },
+    "item_franchise": { "main": [[{ "node": "Merge", "type": "main", "index": 2 }]] },
+    "Merge": { "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "sanitized-version-id",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "sanitized-instance-id"
+  },
+  "id": "tQ4wrENeMR8Vn2YZ",
+  "tags": []
+}
