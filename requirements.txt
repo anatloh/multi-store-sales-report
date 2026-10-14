@@ -1,0 +1,7 @@
+pandas
+pyodbc
+playwright
+python-decouple
+requests
+tqdm
+schedule
