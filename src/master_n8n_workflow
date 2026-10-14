@@ -1,0 +1,724 @@
+{
+  "name": "Master",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 23 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        352
+      ],
+      "id": "3470749f-6ac2-486d-ac4d-23b63bef3cd1",
+      "name": "2300",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/broadcast",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_LINE_CHANNEL_ACCESS_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": {{ $json.message.toJsonString() }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1248,
+        368
+      ],
+      "id": "11fd7589-f2f5-4e94-839b-ecc815301329",
+      "name": "HTTP Request",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const allInputs = $input.all();\n\nconst data = {\n    Direct: { RawSales: 0, ValueMoney: 0, Online: 0, Target: 0 },\n    Franchise: { RawSales: 0, ValueMoney: 0, Online: 0, Target: 0 },\n    ReportDate: \"\"\n};\n\nconst calculateNet = (raw) => Math.round(parseFloat(raw || 0) / 1.05);\n\nallInputs.forEach(item => {\n    const json = item.json;\n\n    if (json.ReportDate) {\n        data.ReportDate = json.ReportDate;\n    } else if (!data.ReportDate) {\n        const dateVal = json['2026'] || json['115.07'] || Object.values(json).find(v => \n            typeof v === 'string' && \n            v.includes('/') && \n            !v.startsWith('http') && \n            /\\d/.test(v)\n        );\n        if (dateVal) data.ReportDate = dateVal;\n    }\n\n    if (json.ShopType === 'Direct') {\n        const sales = json.NetSalesAmount !== undefined ? json.NetSalesAmount : json.DirectSales;\n        if (sales !== undefined) data.Direct.RawSales = parseFloat(sales || 0);\n\n        const money = json.StoredValue !== undefined ? json.StoredValue : json.TotalValueMoney;\n        if (money !== undefined) data.Direct.ValueMoney = parseFloat(money || 0);\n\n        const online = json.Online !== undefined ? json.Online : json.TotalOnline;\n        if (online !== undefined) data.Direct.Online = parseFloat(online || 0);\n\n        if (json.全區49 !== undefined) data.Direct.Target = parseFloat(json.全區49 || 0);\n    }\n\n    if (json.ShopType === 'Franchise') {\n        const sales = json.NetSalesAmount !== undefined ? json.NetSalesAmount : json.FranchiseSales;\n        if (sales !== undefined) data.Franchise.RawSales = parseFloat(sales || 0);\n\n        const money = json.StoredValue !== undefined ? json.StoredValue : json.TotalValueMoney;\n        if (money !== undefined) data.Franchise.ValueMoney = parseFloat(money || 0);\n\n        const online = json.Online !== undefined ? json.Online : json.TotalOnline;\n        if (online !== undefined) data.Franchise.Online = parseFloat(online || 0);\n\n        if (json.全區49 !== undefined) data.Franchise.Target = parseFloat(json.全區49 || 0);\n        else if (json.總 !== undefined) data.Franchise.Target = parseFloat(json.總 || 0);\n    }\n});\n\nconst directNetSales = calculateNet(data.Direct.RawSales - data.Direct.ValueMoney - data.Direct.Online);\nconst franchiseNetSales = calculateNet(data.Franchise.RawSales - data.Franchise.ValueMoney - data.Franchise.Online);\n\nconst calcRate = (rev, target) => {\n    return target > 0 ? ((rev / target) * 100).toFixed(1) : \"0.0\";\n};\n\nconst taipeiNow = new Date(new Date().toLocaleString(\"en-US\", { timeZone: \"Asia/Taipei\" }));\nconst hourStr = String(taipeiNow.getHours()).padStart(2, '0');\nconst defaultDateStr = `${taipeiNow.getFullYear()}/${String(taipeiNow.getMonth() + 1).padStart(2, '0')}/${String(taipeiNow.getDate()).padStart(2, '0')}`;\nconst displayDate = data.ReportDate || defaultDateStr;\n\nconst message = `${displayDate} ${hourStr}:00 營收狀況回報\\n\\n香香雞直營\\n實際營收：${directNetSales.toLocaleString()}\\n達成率：${calcRate(directNetSales, data.Direct.Target)}%\\n會員儲值：${data.Direct.ValueMoney.toLocaleString()}\\n\\n香香雞加盟\\n實際營收：${franchiseNetSales.toLocaleString()}\\n達成率：${calcRate(franchiseNetSales, data.Franchise.Target)}%\\n會員儲值：${data.Franchise.ValueMoney.toLocaleString()}`;\n\nreturn [{ json: { message } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        368
+      ],
+      "id": "689c826b-35d8-4de1-9c71-11174b6ab547",
+      "name": "Code in JavaScript",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst taipeiParts = new Intl.DateTimeFormat('en-US', {\n  timeZone: 'Asia/Taipei',\n  month: 'numeric',\n  day: 'numeric'\n}).formatToParts(now);\n\nconst targetMonth = parseInt(taipeiParts.find(p => p.type === 'month').value, 10);\nconst targetDay = parseInt(taipeiParts.find(p => p.type === 'day').value, 10);\n\nconst results = [];\nconst items = $input.all();\n\nfor (const item of items) {\n  const json = item.json;\n\n  const dateKey = Object.keys(json).find(key => \n    key.includes(\"115\") || key.includes(\"2026\") || \n    key.toLowerCase().includes(\"date\") || key.includes(\"日期\") ||\n    key === \" \"\n  );\n\n  const targetKey = json[\"全區49\"] !== undefined ? \"全區49\" : \n                    json[\"總\"] !== undefined ? \"總\" : \n                    Object.keys(json).find(k => k.includes(\"全區\") || k.includes(\"總\"));\n\n  if (dateKey && json[dateKey]) {\n    const rawVal = String(json[dateKey]).trim();\n    const parts = rawVal.split(/[\\/\\-]/); \n    \n    if (parts.length >= 2) {\n      const sheetMonth = parseInt(parts[parts.length - 2], 10);\n      const sheetDay = parseInt(parts[parts.length - 1], 10);\n\n      if (sheetMonth === targetMonth && sheetDay === targetDay) {\n        const rawAmount = json[targetKey] || 0;\n        item.json[\"全區49\"] = Math.round(parseFloat(rawAmount) || 0);\n        results.push(item);\n      }\n    }\n  }\n}\n\nif (results.length === 0) {\n  return [{ \n    json: { \n      \"全區49\": 0, \n      \"note\": `No target row found for ${targetMonth}/${targetDay}`,\n      \"ShopType\": \"Unknown\" \n    } \n  }];\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        528
+      ],
+      "id": "4c0db24f-6086-4c59-9678-44e3382935ce",
+      "name": "income target date",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        976,
+        352
+      ],
+      "id": "3d6a5437-9695-4374-a2de-c1489e8f3b35",
+      "name": "Merge1",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const taipeiDateStr = new Date().toLocaleDateString(\"sv-SE\", { timeZone: \"Asia/Taipei\" }); \nreturn {\n  targetDate: taipeiDateStr,\n  displayDate: taipeiDateStr.replace(/-/g, '/')\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        304
+      ],
+      "id": "e8cce8a3-4d7a-485c-a23c-ce854e56d4da",
+      "name": "date1",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "current",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 619585478,
+          "mode": "list",
+          "cachedResultName": "加盟",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID/edit#gid=619585478"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        400,
+        608
+      ],
+      "id": "5bf5f79b-6b9f-43e2-b76d-c76e3ed9c8dd",
+      "name": "加盟 income target",
+      "retryOnFail": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID",
+          "mode": "list",
+          "cachedResultName": "current",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 771554595,
+          "mode": "list",
+          "cachedResultName": "直營",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID/edit#gid=771554595"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        400,
+        448
+      ],
+      "id": "58712509-ff73-496a-bcd1-c972140e3dfd",
+      "name": "亞太 income target",
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de8223a9-9477-4cc9-95bc-954050714437",
+              "name": "ShopType",
+              "value": "Direct",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        528,
+        448
+      ],
+      "id": "262f33c1-13fc-4daf-9457-d154ef748d39",
+      "name": "direct type"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de8223a9-9477-4cc9-95bc-954050714437",
+              "name": "ShopType",
+              "value": "Franchise",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        528,
+        608
+      ],
+      "id": "31d58e46-421f-4b59-b3b1-1f219204a1ee",
+      "name": "franchise type"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        688,
+        528
+      ],
+      "id": "9432b92d-c33f-44a1-9c6b-ab79b38c4c4a",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_ID_DIRECT",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_WORKFLOW_ID_DIRECT",
+          "cachedResultName": "Worker - Direct Sales Data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        784,
+        160
+      ],
+      "id": "51c83235-181c-4105-ac75-a8113838424a",
+      "name": "Call 'Worker - Direct Sales Data'1",
+      "retryOnFail": true,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_ID_FRANCHISE",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_WORKFLOW_ID_FRANCHISE",
+          "cachedResultName": "Worker - Franchise Sales Data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        784,
+        352
+      ],
+      "id": "f397424a-5c6e-428d-9969-0143aa039d25",
+      "name": "Call 'Worker - Franchise Sales Data1",
+      "retryOnFail": true,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 16,20 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -288,
+        -320
+      ],
+      "id": "96344d4b-a1a9-415b-98a6-0dcf1f8465dd",
+      "name": "1600 2000"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = new Date();\nd.setHours(d.getHours() + 8); \n\nconst year = d.getFullYear();\nconst month = String(d.getMonth() + 1).padStart(2, '0');\nconst day = String(d.getDate()).padStart(2, '0');\n\nreturn {\n  targetDate: `${year}-${month}-${day}`,\n  displayDate: `${year}/${month}/${day}` \n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -464
+      ],
+      "id": "714c7c43-7f29-48ec-a3ec-a5f44f2176a0",
+      "name": "date"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        464,
+        -288
+      ],
+      "id": "142d9498-ff48-42d6-a1b1-e8f55c38472e",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/broadcast",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_LINE_CHANNEL_ACCESS_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": {{ $json.message.toJsonString() }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        816,
+        -336
+      ],
+      "id": "6079d5e4-7fbf-477a-a5c6-54d89cfde072",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allIncomingItems = $input.all();\nconst getNormalizedJson = (item) => {\n    const normalized = {};\n    if (item && item.json) {\n        Object.keys(item.json).forEach(key => {\n            normalized[key.toLowerCase()] = item.json[key];\n        });\n    }\n    return normalized;\n};\n\nconst normalizedList = allIncomingItems.map(i => getNormalizedJson(i));\nconst statsData = normalizedList.filter(json => \n    json.shoptype && (json.netsalesamount !== undefined || json.lastweeknetsales !== undefined)\n);\n\nlet allItems = [];\nnormalizedList.forEach(json => {\n    if (json.campaigns && Array.isArray(json.campaigns)) {\n        json.campaigns.forEach(camp => {\n            const normCamp = {};\n            Object.keys(camp).forEach(key => {\n                normCamp[key.toLowerCase()] = camp[key];\n            });\n            normCamp.shoptype = json.shoptype; \n            allItems.push(normCamp);\n        });\n    }\n});\n\nconst calculateNet = (amount) => Math.round(parseFloat(amount || 0) / 1.05);\n\nconst getStatsByShop = (shopType) => {\n    const filteredShops = statsData.filter(json => \n        json.shoptype && String(json.shoptype).toLowerCase() === shopType.toLowerCase()\n    );\n    \n    const totals = filteredShops.reduce((acc, curr) => {\n        acc.netsalesamount += parseFloat(curr.netsalesamount || 0);\n        acc.totaltransactions += parseFloat(curr.totaltransactions || 0);\n        acc.storedvalue += parseFloat(curr.storedvalue || curr.storedvalueamount || curr['儲值'] || 0);\n        acc.online += parseFloat(curr.online || curr.onlineamount || curr['線上點'] || 0);\n        acc.lastweeknetsales += parseFloat(curr.lastweeknetsales || 0);\n        acc.lastweektransactions += parseFloat(curr.lastweektransactions || 0);\n        acc.lastweekstoredvalue += parseFloat(curr.lastweekstoredvalue || curr.lastweekstoredvalueamount || curr['上週儲值'] || 0);\n        acc.lastweekonline += parseFloat(curr.lastweekonline || curr.lastweekonlineamount || curr['上週線上點'] || 0);\n        return acc;\n    }, { \n        netsalesamount: 0, totaltransactions: 0, storedvalue: 0, online: 0,\n        lastweeknetsales: 0, lastweektransactions: 0, lastweekstoredvalue: 0, lastweekonline: 0\n    });\n    \n    const rightTotalNetSales = totals.netsalesamount - totals.storedvalue - totals.online;\n    const revNet = calculateNet(rightTotalNetSales);\n    const guest = parseInt(totals.totaltransactions || 0, 10);\n    const avgCheck = guest > 0 ? Math.round(revNet / guest) : 0;\n    \n    const lwAmountNet = totals.lastweeknetsales;\n    const lwGuest = parseInt(totals.lastweektransactions || 0, 10);\n    const lwAvgCheck = lwGuest > 0 ? Math.round(lwAmountNet / lwGuest) : 0;\n    \n    return { revNet, guest, avgCheck, lwAmountNet, lwGuest, lwAvgCheck, totals };\n};\n\nconst dir = getStatsByShop('Direct');\nconst fran = getStatsByShop('Franchise');\n\nconst getCampaign = (campaignName, shopType) => {\n    const items = allItems.filter(json => \n        json.campaignname && \n        String(json.campaignname).toLowerCase() === campaignName.toLowerCase() && \n        json.shoptype && \n        String(json.shoptype).toLowerCase() === shopType.toLowerCase()\n    );\n    const qty = items.reduce((sum, json) => sum + parseFloat(json.campaignqty || 0), 0);\n    const amt = items.reduce((sum, json) => sum + parseFloat(json.campaignamount || 0), 0);\n    return { qty, rev: calculateNet(amt) };\n};\n\nconst now = new Date();\nconst taipeiNow = new Date(now.toLocaleString(\"en-US\", { timeZone: \"Asia/Taipei\" }));\nconst hourInt = taipeiNow.getHours();\nconst hourStr = String(hourInt).padStart(2, '0');\nconst year = taipeiNow.getFullYear();\nconst month = String(taipeiNow.getMonth() + 1).padStart(2, '0');\nconst day = String(taipeiNow.getDate()).padStart(2, '0');\nconst dateStr = `${year}/${month}/${day}`;\n\nconst formatReport = (title, stats, shopType) => {\n    const fries = getCampaign('Fries', shopType);\n    const chicken = getCampaign('Chicken', shopType);\n    const croquette = getCampaign('Croquette', shopType);\n    const combo = getCampaign('Combo', shopType);\n\n    const satayChicken = getCampaign('SatayChicken', shopType);\n    const indonesianShrimpCrackers = getCampaign('IndonesianShrimpCrackers', shopType);\n    const basilSquidBalls = getCampaign('BasilSquidBalls', shopType);\n    const satayCrispySet = getCampaign('SatayCrispySet', shopType);\n    const satayFreshSet = getCampaign('SatayFreshSet', shopType);\n    \n    const goalItem = normalizedList.find(json => json.friesdirect !== undefined);\n    \n    const satayChickenTarget = goalItem ? parseFloat(shopType === 'Direct' ? (goalItem.sataychickendirect || 0) : (goalItem.sataychickenfranchise || 0)) : 0;\n    const indonesianShrimpCrackersTarget = goalItem ? parseFloat(shopType === 'Direct' ? (goalItem.indonesianshrimpcrackersdirect || 0) : (goalItem.indonesianshrimpcrackersfranchise || 0)) : 0;\n    const basilSquidBallsTarget = goalItem ? parseFloat(shopType === 'Direct' ? (goalItem.basilsquidballsdirect || 0) : (goalItem.basilsquidballsfranchise || 0)) : 0;\n    const satayCrispySetTarget = goalItem ? parseFloat(shopType === 'Direct' ? (goalItem.sataycrispysetdirect || 0) : (goalItem.sataycrispysetfranchise || 0)) : 0;\n    const satayFreshSetTarget = goalItem ? parseFloat(shopType === 'Direct' ? (goalItem.satayfreshsetdirect || 0) : (goalItem.satayfreshsetfranchise || 0)) : 0;\n\n    const satayChickenRate = satayChickenTarget > 0 ? ((satayChicken.qty / satayChickenTarget) * 100).toFixed(1) : \"0.0\";\n    const satayChickenShare = stats.revNet > 0 ? ((satayChicken.rev / stats.revNet) * 100).toFixed(1) : \"0.0\";\n\n    const indonesianShrimpCrackersRate = indonesianShrimpCrackersTarget > 0 ? ((indonesianShrimpCrackers.qty / indonesianShrimpCrackersTarget) * 100).toFixed(1) : \"0.0\";\n    const indonesianShrimpCrackersShare = stats.revNet > 0 ? ((indonesianShrimpCrackers.rev / stats.revNet) * 100).toFixed(1) : \"0.0\";\n\n    const basilSquidBallsRate = basilSquidBallsTarget > 0 ? ((basilSquidBalls.qty / basilSquidBallsTarget) * 100).toFixed(1) : \"0.0\";\n    const basilSquidBallsShare = stats.revNet > 0 ? ((basilSquidBalls.rev / stats.revNet) * 100).toFixed(1) : \"0.0\";\n\n    const satayCrispySetRate = satayCrispySetTarget > 0 ? ((satayCrispySet.qty / satayCrispySetTarget) * 100).toFixed(1) : \"0.0\";\n    const satayCrispySetShare = stats.revNet > 0 ? ((satayCrispySet.rev / stats.revNet) * 100).toFixed(1) : \"0.0\";\n\n    const satayFreshSetRate = satayFreshSetTarget > 0 ? ((satayFreshSet.qty / satayFreshSetTarget) * 100).toFixed(1) : \"0.0\";\n    const satayFreshSetShare = stats.revNet > 0 ? ((satayFreshSet.rev / stats.revNet) * 100).toFixed(1) : \"0.0\";\n\n    const croquetteTarget = Math.round(stats.guest * 0.20); \n    const croquetteRate = croquetteTarget > 0 ? ((croquette.qty / croquetteTarget) * 100).toFixed(1) : \"0.0\";\n\n    const revDiff = stats.revNet - stats.lwAmountNet;\n    const guestDiff = stats.guest - stats.lwGuest;\n    const avgDiff = stats.avgCheck - stats.lwAvgCheck;\n\n    const pctRev = stats.lwAmountNet > 0 ? (((stats.revNet - stats.lwAmountNet) / stats.lwAmountNet) * 100).toFixed(1) : \"0.0\";\n    const pctGuest = stats.lwGuest > 0 ? (((stats.guest - stats.lwGuest) / stats.lwGuest) * 100).toFixed(1) : \"0.0\";\n\n    return `${title}\\n${title}營收狀況回報：${hourStr}:00\\n日期：${dateStr}\\n區域：全區\\n營收：${stats.revNet.toLocaleString()}\\n來客 : ${stats.guest.toLocaleString()}\\n客單：${stats.avgCheck.toLocaleString()}\\n\\n沙嗲無骨腿丁：目標${satayChickenTarget.toLocaleString()} / 實際${satayChicken.qty.toLocaleString()} / 達成率${satayChickenRate}% / 營收${satayChicken.rev.toLocaleString()} / 占比${satayChickenShare}%\\n印尼蝦餅：目標${indonesianShrimpCrackersTarget.toLocaleString()} / 實際${indonesianShrimpCrackers.qty.toLocaleString()} / 達成率${indonesianShrimpCrackersRate}% / 營收${indonesianShrimpCrackers.rev.toLocaleString()} / 占比${indonesianShrimpCrackersShare}%\\n九層塔花枝丸：目標${basilSquidBallsTarget.toLocaleString()} / 實際${basilSquidBalls.qty.toLocaleString()} / 達成率${basilSquidBallsRate}% / 營收${basilSquidBalls.rev.toLocaleString()} / 占比${basilSquidBallsShare}%\\n沙嗲香脆組：目標${satayCrispySetTarget.toLocaleString()} / 實際${satayCrispySet.qty.toLocaleString()} / 達成率${satayCrispySetRate}% / 營收${satayCrispySet.rev.toLocaleString()} / 占比${satayCrispySetShare}%\\n沙嗲鮮香組：目標${satayFreshSetTarget.toLocaleString()} / 實際${satayFreshSet.qty.toLocaleString()} / 達成率${satayFreshSetRate}% / 營收${satayFreshSet.rev.toLocaleString()} / 占比${satayFreshSetShare}%\\n可樂餅：目標${croquetteTarget.toLocaleString()} / 實際${croquette.qty.toLocaleString()} / 達成率${croquetteRate}%\\n\\n${title}對比上週：\\n營收：${stats.lwAmountNet.toLocaleString()} → ${stats.revNet.toLocaleString()} (${revDiff >= 0 ? '+' : ''}${revDiff.toLocaleString()}，${pctRev}%)\\n來客 : ${stats.lwGuest.toLocaleString()} → ${stats.guest.toLocaleString()} (${guestDiff >= 0 ? '+' : ''}${guestDiff.toLocaleString()}，${pctGuest}%)\\n客單：${stats.lwAvgCheck.toLocaleString()} → ${stats.avgCheck.toLocaleString()} (${avgDiff >= 0 ? '+' : ''}${avgDiff})`;\n};\n\nconst message = `${formatReport(\"直營\", dir, \"Direct\")}\\n\\n${formatReport(\"加盟\", fran, \"Franchise\")}`;\n\nreturn [{\n    json: {\n        message,\n        reportHour: hourInt,\n        rawDirect: {\n            netSales: dir.revNet,\n            grossSales: dir.totals.netsalesamount,\n            storedValue: dir.totals.storedvalue,\n            online: dir.totals.online,\n            transactions: dir.guest\n        },\n        rawFranchise: {\n            netSales: fran.revNet,\n            grossSales: fran.totals.netsalesamount,\n            storedValue: fran.totals.storedvalue,\n            online: fran.totals.online,\n            transactions: fran.guest\n        }\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -272
+      ],
+      "id": "e3c3a3e0-fa1f-4e24-89c0-9f5bb50b8c0a",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_ID_FRANCHISE",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_WORKFLOW_ID_FRANCHISE",
+          "cachedResultName": "Worker - Franchise Sales Data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        144,
+        -368
+      ],
+      "id": "42625537-f2ab-4ec3-9f6a-4a8ce79ce896",
+      "name": "Call 'Worker - Franchise Sales Data",
+      "retryOnFail": true,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID_COMBO",
+          "mode": "list",
+          "cachedResultName": "115.07 一拳超人目標",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_COMBO/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2029879009,
+          "mode": "list",
+          "cachedResultName": "工作表1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_COMBO/edit#gid=2029879009"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -96,
+        32
+      ],
+      "id": "22bcc097-a115-4060-9616-28cfeecbcff5",
+      "name": "套餐 target data",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID_TARGETS",
+          "mode": "list",
+          "cachedResultName": "115.07 搖搖薯條+搖搖雞目標",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_TARGETS/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 124565294,
+          "mode": "list",
+          "cachedResultName": "薯條",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_TARGETS/edit#gid=124565294"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -96,
+        -288
+      ],
+      "id": "cda469b1-181a-4458-8bed-4a215bd7be82",
+      "name": "薯條 target data1",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID_TARGETS",
+          "mode": "list",
+          "cachedResultName": "115.07 搖搖薯條+搖搖雞目標",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_TARGETS/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1425795909,
+          "mode": "list",
+          "cachedResultName": "雞丁",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_TARGETS/edit#gid=1425795909"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -96,
+        -128
+      ],
+      "id": "ab3ab8f2-21c5-421d-a86a-e706478d8ff6",
+      "name": "雞丁 target data1",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const julyEventRows = $input.all();\nconst taipeiTimeString = new Date().toLocaleString(\"en-US\", { timeZone: \"Asia/Taipei\" });\nconst day = new Date(taipeiTimeString).getDay();\n\nlet category = \"平日\"; \nif (day === 5) {\n    category = \"週五\";\n} else if (day === 6 || day === 0) {\n    category = \"假日\";\n}\n\nconst findTarget = (rows, searchKey, valueCol) => {\n    const row = rows.find(r => {\n        const val = r.json[searchKey];\n        return val && String(val).trim() === category;\n    });\n    return row ? parseFloat(row.json[valueCol] || 0) : 0;\n};\n\nreturn [{\n    json: {\n        categoryToday: category,\n        friesDirect: findTarget(julyEventRows, \"薯條 直營\", \"col_2\"),\n        friesFranchise: findTarget(julyEventRows, \"薯條 加盟\", \"col_4\"),\n        chickenDirect: findTarget(julyEventRows, \"雞丁 直營\", \"col_2\"), \n        chickenFranchise: findTarget(julyEventRows, \"雞丁 加盟\", \"col_4\"),\n        comboDirect: findTarget(julyEventRows, \"套餐 直營\", \"col_2\"),\n        comboFranchise: findTarget(julyEventRows, \"套餐 加盟\", \"col_4\"),\n        satayChickenDirect: findTarget(julyEventRows, \"沙嗲無骨雞 直營\", \"col_2\"),\n        indonesianShrimpCrackersDirect: findTarget(julyEventRows, \"印尼蝦餅 直營\", \"col_4\"),\n        basilSquidBallsDirect: findTarget(julyEventRows, \"九層塔花枝丸 直營\", \"col_6\"),\n        satayCrispySetDirect: findTarget(julyEventRows, \"沙嗲香脆組 直營\", \"col_8\"),\n        satayFreshSetDirect: findTarget(julyEventRows, \"沙嗲鮮香組 直營\", \"col_10\"),\n        satayChickenFranchise: findTarget(julyEventRows, \"沙嗲無骨雞 加盟\", \"col_12\"),\n        indonesianShrimpCrackersFranchise: findTarget(julyEventRows, \"印尼蝦餅 加盟\", \"col_14\"),\n        basilSquidBallsFranchise: findTarget(julyEventRows, \"九層塔花枝丸 加盟\", \"col_16\"),\n        satayCrispySetFranchise: findTarget(julyEventRows, \"沙嗲香脆組 加盟\", \"col_18\"),\n        satayFreshSetFranchise: findTarget(julyEventRows, \"沙嗲鮮香組 加盟\", \"col_20\")\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        -32
+      ],
+      "id": "871b787d-d79b-4ced-835f-dda7325daa3f",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DECLARE @TargetDate DATE = CAST(DATEADD(HOUR, 8, GETUTCDATE()) AS DATE);\nDECLARE @ReportHour INT = {{ $json.reportHour }};\n\nMERGE INTO [SalesDataDB].[dbo].[Daily_Summary_Sales] AS target\nUSING (\n    SELECT \n        @TargetDate AS ReportDate,\n        @ReportHour AS ReportHour,\n        'Direct' AS ShopType,\n        {{ $json.rawDirect.netSales }} AS NetSalesAmount,\n        {{$json.rawDirect.storedValue }} AS StoredValue,\n        {{ $json.rawDirect.online }} AS Online,\n        {{$json.rawDirect.transactions }} AS TotalTransactions\n    UNION ALL\n    SELECT \n        @TargetDate AS ReportDate,\n        @ReportHour AS ReportHour,\n        'Franchise' AS ShopType,\n        {{ $json.rawFranchise.netSales }} AS NetSalesAmount,\n        {{$json.rawFranchise.storedValue }} AS StoredValue,\n        {{ $json.rawFranchise.online }} AS Online,\n        {{$json.rawFranchise.transactions }} AS TotalTransactions\n) AS source\nON (\n    target.ReportDate = source.ReportDate \n    AND target.ShopType = source.ShopType \n    AND target.ReportHour = source.ReportHour\n)\nWHEN MATCHED THEN\n    UPDATE SET \n        NetSalesAmount = source.NetSalesAmount,\n        StoredValue = source.StoredValue,\n        Online = source.Online,\n        TotalTransactions = source.TotalTransactions,\n        CreatedAt = GETDATE()\nWHEN NOT MATCHED THEN\n    INSERT (ReportDate, ReportHour, ShopType, NetSalesAmount, StoredValue, Online, TotalTransactions)\n    VALUES (source.ReportDate, source.ReportHour, source.ShopType, source.NetSalesAmount, source.StoredValue, source.Online, source.TotalTransactions);"
+      },
+      "type": "n8n-nodes-base.microsoftSql",
+      "typeVersion": 1.1,
+      "position": [
+        816,
+        -160
+      ],
+      "id": "6526eb79-75b2-4f63-a58b-7e1abc09b594",
+      "name": "Save Daily Summary to DB",
+      "retryOnFail": true,
+      "credentials": {
+        "microsoftSql": {
+          "id": "YOUR_MSSQL_CREDENTIAL_ID",
+          "name": "Microsoft SQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        128,
+        -64
+      ],
+      "id": "ae0c23c3-47f7-4147-ac73-43ed51b9c9d0",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_WORKFLOW_ID_DIRECT",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_WORKFLOW_ID_DIRECT",
+          "cachedResultName": "Worker - Direct Sales Data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        144,
+        -544
+      ],
+      "id": "6aedfd22-3e36-4235-b311-d76c37d0482d",
+      "name": "Call 'Worker - Direct Sales Data'",
+      "retryOnFail": true,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SPREADSHEET_ID_SATAY",
+          "mode": "list",
+          "cachedResultName": "10月satay",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_SATAY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1239602254,
+          "mode": "list",
+          "cachedResultName": "satay",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SPREADSHEET_ID_SATAY/edit#gid=1239602254"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -96,
+        192
+      ],
+      "id": "45bcd178-0165-4c5d-ad07-8f628685423c",
+      "name": "satay target",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "2300": {
+      "main": [
+        [
+          { "node": "date1", "type": "main", "index": 0 },
+          { "node": "亞太 income target", "type": "main", "index": 0 },
+          { "node": "加盟 income target", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Code in JavaScript": { "main": [[{ "node": "HTTP Request", "type": "main", "index": 0 }]] },
+    "income target date": { "main": [[{ "node": "Merge1", "type": "main", "index": 2 }]] },
+    "Merge1": { "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]] },
+    "date1": {
+      "main": [
+        [
+          { "node": "Call 'Worker - Direct Sales Data'1", "type": "main", "index": 0 },
+          { "node": "Call 'Worker - Franchise Sales Data1", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "亞太 income target": { "main": [[{ "node": "direct type", "type": "main", "index": 0 }]] },
+    "加盟 income target": { "main": [[{ "node": "franchise type", "type": "main", "index": 0 }]] },
+    "direct type": { "main": [[{ "node": "Merge3", "type": "main", "index": 0 }]] },
+    "franchise type": { "main": [[{ "node": "Merge3", "type": "main", "index": 1 }]] },
+    "Merge3": { "main": [[{ "node": "income target date", "type": "main", "index": 0 }]] },
+    "Call 'Worker - Franchise Sales Data1": { "main": [[{ "node": "Merge1", "type": "main", "index": 1 }]] },
+    "Call 'Worker - Direct Sales Data'1": { "main": [[{ "node": "Merge1", "type": "main", "index": 0 }]] },
+    "1600 2000": {
+      "main": [
+        [
+          { "node": "date", "type": "main", "index": 0 },
+          { "node": "薯條 target data1", "type": "main", "index": 0 },
+          { "node": "雞丁 target data1", "type": "main", "index": 0 },
+          { "node": "套餐 target data", "type": "main", "index": 0 },
+          { "node": "satay target", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "date": {
+      "main": [
+        [
+          { "node": "Call 'Worker - Direct Sales Data'", "type": "main", "index": 0 },
+          { "node": "Call 'Worker - Franchise Sales Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Merge2": { "main": [[{ "node": "Code in JavaScript2", "type": "main", "index": 0 }]] },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          { "node": "HTTP Request1", "type": "main", "index": 0 },
+          { "node": "Save Daily Summary to DB", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Call 'Worker - Franchise Sales Data": { "main": [[{ "node": "Merge2", "type": "main", "index": 1 }]] },
+    "套餐 target data": { "main": [[{ "node": "Merge", "type": "main", "index": 2 }]] },
+    "薯條 target data1": { "main": [[{ "node": "Merge", "type": "main", "index": 0 }]] },
+    "雞丁 target data1": { "main": [[{ "node": "Merge", "type": "main", "index": 1 }]] },
+    "Code in JavaScript3": { "main": [[{ "node": "Merge2", "type": "main", "index": 2 }]] },
+    "Merge": { "main": [[{ "node": "Code in JavaScript3", "type": "main", "index": 0 }]] },
+    "Call 'Worker - Direct Sales Data'": { "main": [[{ "node": "Merge2", "type": "main", "index": 0 }]] },
+    "satay target": { "main": [[{ "node": "Merge", "type": "main", "index": 3 }]] }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Taipei",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": false
+  },
+  "versionId": "sanitized-version-id",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "sanitized-instance-id"
+  },
+  "id": "1Iu6LqJ0jshmXWIg",
+  "tags": []
+}
